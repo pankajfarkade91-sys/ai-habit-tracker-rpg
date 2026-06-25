@@ -1,0 +1,9 @@
+node_modules
+.next
+prisma
+coverage
+dist
+build
+.git
+public/sw.js
+public/workbox-*.js
