@@ -1,0 +1,498 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("DATABASE_URL_SHADOW")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  name          String?
+  image         String?
+  password      String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  accounts      Account[]
+  sessions      Session[]
+  settings      UserSettings?
+  stats         UserStats?
+  habits        Habit[]
+  habitLogs     HabitLog[]
+  studySessions StudySession[]
+  workoutSessions WorkoutSession[]
+  achievements  Achievement[]
+  dailyQuests   DailyQuest[]
+  weeklyQuests  WeeklyQuest[]
+  monthlyQuests MonthlyQuest[]
+  aiChats       AIChat[]
+  streaks       Streak[]
+  friendships   Friendship[] @relation("userFriendships")
+  friendedBy    Friendship[] @relation("friendedByUser")
+  leaderboardEntries LeaderboardEntry[]
+  notifications Notification[]
+  rewards       Reward[]
+  inventory     InventoryItem[]
+
+  @@index([email])
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sessionToken String @unique
+  userId    String
+  expires   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserSettings {
+  id                   String  @id @default(cuid())
+  userId               String  @unique
+  darkMode             Boolean @default(true)
+  emailNotifications   Boolean @default(true)
+  pushNotifications    Boolean @default(true)
+  dailyReminder        Boolean @default(true)
+  dailyReminderTime    String  @default("09:00") // HH:mm format
+  language             String  @default("en")
+  timezone             String  @default("UTC")
+  weekStartDay         Int     @default(0) // 0 = Sunday, 1 = Monday
+  accentColor          String  @default("#a78bfa") // Purple
+  exportDataMonthly    Boolean @default(false)
+  allowAnalytics       Boolean @default(true)
+  allowAICoaching      Boolean @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserStats {
+  id                   String  @id @default(cuid())
+  userId               String  @unique
+  totalXP              Int     @default(0)
+  currentLevel         Int     @default(1)
+  coins                Int     @default(0)
+  completedHabits      Int     @default(0)
+  missedHabits         Int     @default(0)
+  currentStreak        Int     @default(0)
+  longestStreak        Int     @default(0)
+  totalHabitDays       Int     @default(0)
+  rank                 String  @default("Novice") // Novice, Initiate, Champion, Legend
+  prestigeLevel        Int     @default(0)
+  totalStudyHours      Int     @default(0)
+  totalWorkoutHours    Int     @default(0)
+  totalWorkoutSessions Int     @default(0)
+  achievementCount     Int     @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([currentLevel])
+  @@index([rank])
+}
+
+enum HabitCategory {
+  STUDY
+  WORKOUT
+  MEDITATION
+  READING
+  CODING
+  HEALTH
+  FINANCE
+  PRODUCTIVITY
+  CUSTOM
+}
+
+enum HabitDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXTREME
+}
+
+enum RecurrenceType {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+model Habit {
+  id              String      @id @default(cuid())
+  userId          String
+  title           String
+  description     String?     @db.Text
+  category        HabitCategory
+  difficulty      HabitDifficulty @default(MEDIUM)
+  recurrence      RecurrenceType @default(DAILY)
+  recurrenceRule  String?     // RRULE format for custom recurrence
+  targetDaysPerWeek Int?      // For weekly habits
+  icon            String?     // Emoji or icon name
+  color           String?     // Hex color
+  xpReward        Int        @default(10)
+  coinReward      Int        @default(5)
+  streakBonus     Int        @default(0) // Additional XP every N days
+  reminderTime    String?     // HH:mm format
+  reminderEnabled Boolean     @default(true)
+  archived        Boolean     @default(false)
+  deletedAt       DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs HabitLog[]
+  streaks Streak[] @relation("habitStreaks")
+
+  @@index([userId])
+  @@index([category])
+  @@index([archived])
+  @@index([createdAt])
+}
+
+model HabitLog {
+  id          String    @id @default(cuid())
+  userId      String
+  habitId     String
+  date        DateTime  @db.Date
+  completed   Boolean   @default(true)
+  notes       String?   @db.Text
+  xpEarned    Int       @default(0)
+  coinEarned  Int       @default(0)
+  skipped     Boolean   @default(false)
+  skippedReason String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date, userId])
+  @@index([userId])
+  @@index([habitId])
+  @@index([date])
+}
+
+model Streak {
+  id            String    @id @default(cuid())
+  userId        String
+  habitId       String
+  currentCount  Int       @default(0)
+  longestCount  Int       @default(0)
+  lastLogDate   DateTime  @db.Date
+  startDate     DateTime  @db.Date
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habit Habit @relation("habitStreaks", fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, userId])
+  @@index([userId])
+  @@index([habitId])
+}
+
+model StudySession {
+  id              String    @id @default(cuid())
+  userId          String
+  subject         String
+  topic           String?
+  duration        Int       // in minutes
+  startTime       DateTime
+  endTime         DateTime
+  focusLevel      Int?      // 1-10 scale
+  notes           String?   @db.Text
+  pomodoroSessions Int?     // Number of pomodoro completed
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([subject])
+  @@index([startTime])
+}
+
+model WorkoutSession {
+  id              String    @id @default(cuid())
+  userId          String
+  exerciseName    String
+  duration        Int       // in minutes
+  caloriesBurned  Int?
+  intensity       String    @default("MEDIUM") // LOW, MEDIUM, HIGH, EXTREME
+  sets            Int?
+  reps            Int?
+  weight          Int?      // in lbs or kg
+  notes           String?   @db.Text
+  startTime       DateTime
+  endTime         DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([exerciseName])
+  @@index([startTime])
+}
+
+model Achievement {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String
+  description     String    @db.Text
+  icon            String?   // Emoji or icon name
+  rarity          String    @default("COMMON") // COMMON, RARE, EPIC, LEGENDARY
+  unlockedAt      DateTime
+  xpReward        Int       @default(0)
+  coinReward      Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([rarity])
+  @@index([unlockedAt])
+}
+
+enum QuestStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  FAILED
+}
+
+model DailyQuest {
+  id              String      @id @default(cuid())
+  userId          String
+  title           String
+  description     String?     @db.Text
+  requirement     Int         // Number of habits to complete
+  progress        Int         @default(0)
+  status          QuestStatus @default(ACTIVE)
+  xpReward        Int         @default(50)
+  coinReward      Int         @default(25)
+  completedAt     DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model WeeklyQuest {
+  id              String      @id @default(cuid())
+  userId          String
+  title           String
+  description     String?     @db.Text
+  requirement     Int
+  progress        Int         @default(0)
+  status          QuestStatus @default(ACTIVE)
+  xpReward        Int         @default(150)
+  coinReward      Int         @default(75)
+  completedAt     DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model MonthlyQuest {
+  id              String      @id @default(cuid())
+  userId          String
+  title           String
+  description     String?     @db.Text
+  requirement     Int
+  progress        Int         @default(0)
+  status          QuestStatus @default(ACTIVE)
+  xpReward        Int         @default(500)
+  coinReward      Int         @default(250)
+  completedAt     DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model AIChat {
+  id              String    @id @default(cuid())
+  userId          String
+  topic           String    // "habit_analysis", "coaching", "motivation", etc.
+  messages        AIMessage[]
+  summary         String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([topic])
+  @@index([createdAt])
+}
+
+model AIMessage {
+  id              String    @id @default(cuid())
+  chatId          String
+  role            String    // "user" or "assistant"
+  content         String    @db.Text
+  tokens          Int?      // Approximate token count
+  createdAt       DateTime  @default(now())
+
+  chat AIChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+}
+
+model Friendship {
+  id              String    @id @default(cuid())
+  userId          String
+  friendId        String
+  status          String    @default("pending") // pending, accepted, blocked
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation("userFriendships", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("friendedByUser", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+  @@index([userId])
+  @@index([friendId])
+  @@index([status])
+}
+
+model LeaderboardEntry {
+  id              String    @id @default(cuid())
+  userId          String
+  rank            Int
+  period          String    @default("weekly") // weekly, monthly, alltime
+  xpEarned        Int       @default(0)
+  habitsCompleted Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, period])
+  @@index([userId])
+  @@index([rank])
+  @@index([period])
+}
+
+model Notification {
+  id              String    @id @default(cuid())
+  userId          String
+  type            String    // "achievement", "quest_complete", "reminder", etc.
+  title           String
+  message         String    @db.Text
+  data            String?   @db.Text // JSON string with additional data
+  read            Boolean   @default(false)
+  actionUrl       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Reward {
+  id              String    @id @default(cuid())
+  userId          String
+  name            String
+  description     String?   @db.Text
+  type            String    // "badge", "title", "cosmetic", etc.
+  rarity          String    @default("COMMON")
+  claimedAt       DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([claimedAt])
+}
+
+model InventoryItem {
+  id              String    @id @default(cuid())
+  userId          String
+  itemId          String    // Reference to item master data
+  itemName        String
+  quantity        Int       @default(1)
+  equipped        Boolean   @default(false)
+  acquiredAt      DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([itemId])
+}
+
+// System models
+model HealthCheck {
+  id              String    @id @default(cuid())
+  status          String    // "healthy", "degraded", "down"
+  database        Boolean   @default(true)
+  redis           Boolean   @default(true)
+  timestamp       DateTime  @default(now())
+
+  @@index([timestamp])
+}
